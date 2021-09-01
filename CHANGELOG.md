@@ -6,6 +6,6 @@
 
 Initial Version
 
-Update text
+Update text again
 
 <!-- <END NEW CHANGELOG ENTRY> -->
