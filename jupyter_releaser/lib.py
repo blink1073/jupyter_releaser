@@ -132,6 +132,7 @@ def draft_changelog(
     npm_versions = None
     if util.PACKAGE_JSON.exists():
         npm_versions = npm.get_package_versions(version)
+        util.log(npm_versions)
 
     tags = util.run("git --no-pager tag", quiet=True)
     if f"v{version}" in tags.splitlines():
@@ -148,11 +149,7 @@ def draft_changelog(
     current = changelog.extract_current(changelog_path)
     util.log(f"\n\nCurrent Changelog Entry:\n{current}")
 
-    title = f"{changelog.PR_PREFIX} for {version} on {branch}"
-    commit_message = f'git commit -a -m "{title}"'
-    body = title
-
-    util.log(f"Creating draft GitHub release for {version}")
+    util.log(f"\n\nCreating draft GitHub release for {version}")
     owner, repo_name = repo.split("/")
     gh = util.get_gh_object(dry_run=dry_run, owner=owner, repo=repo_name, token=auth)
 
@@ -174,23 +171,8 @@ def draft_changelog(
             json.dump(data, fid)
 
         release = gh.create_release(
-            f"v{version}", branch, f"v{version}", body, True, prerelease, files=[metadata_path]
+            f"v{version}", branch, f"v{version}", current, True, prerelease, files=[metadata_path]
         )
-
-    if npm_versions:
-        body += f"\n```{npm_versions}\n```"
-
-    body += '\n\nAfter merging this PR run the "Full Release" Workflow on your fork of `jupyter_releaser` with the following inputs'
-    body += f"""
-| Input  | Value |
-| ------------- | ------------- |
-| Draft Release | {release.html_url}  |
-"""
-    if since_last_stable:
-        body += "| Since Last Stable | true |"
-    elif since:
-        body += f"| Since | {since} |"
-    util.log(body)
 
     # Remove draft releases over a day old
     if bool(os.environ.get("GITHUB_ACTIONS")):
@@ -202,8 +184,6 @@ def draft_changelog(
             delta = datetime.utcnow() - d_created
             if delta.days > 0:
                 gh.repos.delete_release(rel.id)
-
-    make_changelog_pr(auth, branch, repo, title, commit_message, body, dry_run=dry_run)
 
     # Set the GitHub action output for the release url.
     util.actions_output("release_url", release.html_url)
@@ -310,6 +290,7 @@ def draft_release(
     remote_name = util.get_remote_name(dry_run)
     remote_url = util.run(f"git config --get remote.{remote_name}.url")
     if not os.path.exists(remote_url):
+        util.ensure_sha()
         util.run(f"git push {remote_name} HEAD:{branch} --follow-tags --tags")
 
     # Upload the assets to the draft release.
